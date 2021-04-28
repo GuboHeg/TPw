@@ -1,0 +1,813 @@
+theory newwatm begin
+
+// Function signature and definition of the equational theory E
+
+builtins: diffie-hellman
+functions: NN_R/1 [private], NN_S/1 [private], add_inner/2, add_outer/2,
+           adec/2, aenc/2, fst/1, h/1, hom/3, minus_inner/2, pair/2, pk/1, snd/1
+equations:
+    add_inner(a, 0) = a,
+    add_inner(a, b) = add_inner(b, a),
+    add_inner(a, add_inner(b, c)) = add_inner(add_inner(a, b), c),
+    add_inner(a, minus_inner(0, a)) = 0,
+    add_outer(a, 0) = a,
+    add_outer(a, b) = add_outer(b, a),
+    add_outer(a, add_outer(b, c)) = add_outer(add_outer(a, b), c),
+    adec(aenc(x.1, pk(x.2)), x.2) = x.1,
+    fst(<x.1, x.2>) = x.1,
+    hom(add_outer(aenc(a, pk), aenc(b, pk)), sk, pk)
+  = add_inner(adec(aenc(a, pk), sk), adec(aenc(b, pk), sk)),
+    minus_inner(a, 0) = a,
+    snd(<x.1, x.2>) = x.2
+
+
+
+restriction Equal:
+  "∀ a b #i. (Eq( a, b ) @ #i) ⇒ (a = b)"
+  // safety formula
+
+restriction NotEqual:
+  "∀ a b #i. (Neq( a, b ) @ #i) ⇒ (¬(a = b))"
+  // safety formula
+
+restriction OnlyOnceR:
+  "∀ x #i #j. ((OnlyOnceR( x ) @ #i) ∧ (OnlyOnceR( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+restriction OnlyOnceS:
+  "∀ x #i #j. ((OnlyOnceS( x ) @ #i) ∧ (OnlyOnceS( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+restriction OnlyOnceV:
+  "∀ x #i #j. ((OnlyOnceV( x ) @ #i) ∧ (OnlyOnceV( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+rule (modulo E) R_Init:
+   [ Fr( ~sk ), Fr( ~k_r ), Fr( ~i1 ), Fr( ~b1 ) ]
+  --[ Watermark( $R, ~b1 ), OnlyOnceR( 'Init' ) ]->
+   [ St_R_Init( $R, $V, ~sk, ~k_r, ~i1, ~b1 ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) S_Init:
+   [ Fr( ~k_s ) ]
+  --[ Aexp( ~k_s ), OnlyOnceS( 'Init' ) ]->
+   [ St_S_Init( $S, $V, ~k_s ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) V_Init:
+   [ ] --[ OnlyOnceV( 'Init' ) ]-> [ St_V( $V, $R, $S ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_verif_send:
+   [ St_R_Init( R, V, sk, k_r, i1, b1 ) ]
+  --[ Label( NN_R(i1) ), OnlyOnceR( '1' ), RVS( R, V ) ]->
+   [
+   Out( <R, V, pk(sk), i1, h(<i1, NN_R(i1)>)^k_r, aenc(b1, pk(sk))> ),
+   St_R_verif_send( R, V, sk, k_r, b1 )
+   ]
+
+  /*
+  rule (modulo AC) R_verif_send:
+     [ St_R_Init( R, V, sk, k_r, i1, b1 ) ]
+    --[ Label( NN_R(i1) ), OnlyOnceR( '1' ), RVS( R, V ) ]->
+     [
+     Out( <R, V, pk(sk), i1, z, aenc(b1, pk(sk))> ),
+     St_R_verif_send( R, V, sk, k_r, b1 )
+     ]
+    variants (modulo AC)
+    1. i1    = i1.9
+       k_r   = k_r.10
+       z     = h(<i1.9, NN_R(i1.9)>)^k_r.10
+    
+    2. i1    = i1.9
+       k_r   = one
+       z     = h(<i1.9, NN_R(i1.9)>)
+  */
+
+rule (modulo E) V_querying_S:
+   [ In( <R, V, pk, i1, a, ab> ), St_V( V, R, S ) ]
+  --[ OnlyOnceV( '1' ), VQS( V, R, S ) ]->
+   [ Out( <V, S, i1, a> ), St_V_Init( V, R, S, pk, i1, <a, ab> ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) S_V_query_recv:
+   [ In( <V, S, i1, h(a)^k> ), St_S_Init( S, V, ks ) ]
+  --[ OnlyOnceS( '1' ), Label( NN_S(i1) ), SVQR( S, V ) ]->
+   [ St_S_Init2( S, V, ks ), Out( <S, V, h(a)^k^ks, h(<i1, NN_S(i1)>)^ks> )
+   ]
+
+  /*
+  rule (modulo AC) S_V_query_recv:
+     [ In( <V, S, i1, z> ), St_S_Init( S, V, ks ) ]
+    --[ OnlyOnceS( '1' ), Label( NN_S(i1) ), SVQR( S, V ) ]->
+     [ St_S_Init2( S, V, ks ), Out( <S, V, z.1, z.2> ) ]
+    variants (modulo AC)
+     1. i1    = i1.11
+        ks    = ks.13
+        z     = h(a.17)^k.17
+        z.1   = h(a.17)^(ks.13*k.17)
+        z.2   = h(<i1.11, NN_S(i1.11)>)^ks.13
+    
+     2. i1    = i1.11
+        ks    = ks.13
+        z     = h(a.17)
+        z.1   = h(a.17)^ks.13
+        z.2   = h(<i1.11, NN_S(i1.11)>)^ks.13
+    
+     3. i1    = i1.11
+        ks    = one
+        z     = h(a.17)^k.17
+        z.1   = h(a.17)^k.17
+        z.2   = h(<i1.11, NN_S(i1.11)>)
+    
+     4. i1    = i1.11
+        ks    = one
+        z     = h(a.17)
+        z.1   = h(a.17)
+        z.2   = h(<i1.11, NN_S(i1.11)>)
+    
+     5. i1    = i1.12
+        ks    = ks.14
+        z     = h(a.19)^inv(ks.14)
+        z.1   = h(a.19)
+        z.2   = h(<i1.12, NN_S(i1.12)>)^ks.14
+    
+     6. i1    = i1.12
+        ks    = inv(x.18)
+        z     = h(a.19)^x.18
+        z.1   = h(a.19)
+        z.2   = h(<i1.12, NN_S(i1.12)>)^inv(x.18)
+    
+     7. i1    = i1.13
+        ks    = ks.15
+        z     = h(a.21)^inv((ks.15*x.20))
+        z.1   = h(a.21)^inv(x.20)
+        z.2   = h(<i1.13, NN_S(i1.13)>)^ks.15
+    
+     8. i1    = i1.13
+        ks    = ks.15
+        z     = h(a.21)^(x.19*inv(ks.15))
+        z.1   = h(a.21)^x.19
+        z.2   = h(<i1.13, NN_S(i1.13)>)^ks.15
+    
+     9. i1    = i1.13
+        ks    = inv(x.19)
+        z     = h(a.21)^(x.19*x.20)
+        z.1   = h(a.21)^x.20
+        z.2   = h(<i1.13, NN_S(i1.13)>)^inv(x.19)
+    
+    10. i1    = i1.13
+        ks    = inv(x.20)
+        z     = h(a.21)^inv(x.19)
+        z.1   = h(a.21)^inv((x.19*x.20))
+        z.2   = h(<i1.13, NN_S(i1.13)>)^inv(x.20)
+    
+    11. i1    = i1.13
+        ks    = inv((x.19*x.20))
+        z     = h(a.21)^x.19
+        z.1   = h(a.21)^inv(x.20)
+        z.2   = h(<i1.13, NN_S(i1.13)>)^inv((x.19*x.20))
+    
+    12. i1    = i1.13
+        ks    = (x.19*x.20)
+        z     = h(a.21)^inv(x.19)
+        z.1   = h(a.21)^x.20
+        z.2   = h(<i1.13, NN_S(i1.13)>)^(x.19*x.20)
+    
+    13. i1    = i1.13
+        ks    = (x.20*inv(x.19))
+        z     = h(a.21)^x.19
+        z.1   = h(a.21)^x.20
+        z.2   = h(<i1.13, NN_S(i1.13)>)^(x.20*inv(x.19))
+    
+    14. i1    = i1.13
+        ks    = (x.20*inv(x.19))
+        z     = h(a.21)^(x.19*inv(x.20))
+        z.1   = h(a.21)
+        z.2   = h(<i1.13, NN_S(i1.13)>)^(x.20*inv(x.19))
+    
+    15. i1    = i1.14
+        ks    = ks.16
+        z     = h(a.23)^(x.20*inv((ks.16*x.22)))
+        z.1   = h(a.23)^(x.20*inv(x.22))
+        z.2   = h(<i1.14, NN_S(i1.14)>)^ks.16
+    
+    16. i1    = i1.14
+        ks    = inv(x.22)
+        z     = h(a.23)^(x.20*inv(x.21))
+        z.1   = h(a.23)^(x.20*inv((x.21*x.22)))
+        z.2   = h(<i1.14, NN_S(i1.14)>)^inv(x.22)
+    
+    17. i1    = i1.14
+        ks    = inv((x.20*x.22))
+        z     = h(a.23)^(x.20*x.21)
+        z.1   = h(a.23)^(x.21*inv(x.22))
+        z.2   = h(<i1.14, NN_S(i1.14)>)^inv((x.20*x.22))
+    
+    18. i1    = i1.14
+        ks    = inv((x.20*x.22))
+        z     = h(a.23)^(x.20*inv(x.21))
+        z.1   = h(a.23)^inv((x.21*x.22))
+        z.2   = h(<i1.14, NN_S(i1.14)>)^inv((x.20*x.22))
+    
+    19. i1    = i1.14
+        ks    = (x.20*x.22)
+        z     = h(a.23)^inv((x.20*x.21))
+        z.1   = h(a.23)^(x.22*inv(x.21))
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.20*x.22)
+    
+    20. i1    = i1.14
+        ks    = (x.20*inv(x.22))
+        z     = h(a.23)^inv((x.20*x.21))
+        z.1   = h(a.23)^inv((x.21*x.22))
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.20*inv(x.22))
+    
+    21. i1    = i1.14
+        ks    = (x.21*x.22)
+        z     = h(a.23)^(x.20*inv(x.21))
+        z.1   = h(a.23)^(x.20*x.22)
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.21*x.22)
+    
+    22. i1    = i1.14
+        ks    = (x.21*x.22*inv(x.20))
+        z     = h(a.23)^(x.20*inv(x.21))
+        z.1   = h(a.23)^x.22
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.21*x.22*inv(x.20))
+    
+    23. i1    = i1.14
+        ks    = (x.21*inv(x.20))
+        z     = h(a.23)^(x.20*inv((x.21*x.22)))
+        z.1   = h(a.23)^inv(x.22)
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.21*inv(x.20))
+    
+    24. i1    = i1.14
+        ks    = (x.21*inv(x.22))
+        z     = h(a.23)^inv(x.20)
+        z.1   = h(a.23)^(x.21*inv((x.20*x.22)))
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.21*inv(x.22))
+    
+    25. i1    = i1.14
+        ks    = (x.21*inv((x.20*x.22)))
+        z     = h(a.23)^x.20
+        z.1   = h(a.23)^(x.21*inv(x.22))
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.21*inv((x.20*x.22)))
+    
+    26. i1    = i1.14
+        ks    = (x.21*inv((x.20*x.22)))
+        z     = h(a.23)^(x.20*inv(x.21))
+        z.1   = h(a.23)^inv(x.22)
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.21*inv((x.20*x.22)))
+    
+    27. i1    = i1.14
+        ks    = (x.22*inv(x.20))
+        z     = h(a.23)^(x.20*x.21)
+        z.1   = h(a.23)^(x.21*x.22)
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.22*inv(x.20))
+    
+    28. i1    = i1.14
+        ks    = (x.22*inv(x.20))
+        z     = h(a.23)^(x.20*x.21*inv(x.22))
+        z.1   = h(a.23)^x.21
+        z.2   = h(<i1.14, NN_S(i1.14)>)^(x.22*inv(x.20))
+    
+    29. i1    = i1.15
+        ks    = inv((x.21*x.24))
+        z     = h(a.25)^(x.21*x.22*inv(x.23))
+        z.1   = h(a.25)^(x.22*inv((x.23*x.24)))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^inv((x.21*x.24))
+    
+    30. i1    = i1.15
+        ks    = (x.21*x.23*inv(x.24))
+        z     = h(a.25)^inv((x.21*x.22))
+        z.1   = h(a.25)^(x.23*inv((x.22*x.24)))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.21*x.23*inv(x.24))
+    
+    31. i1    = i1.15
+        ks    = (x.22*x.23*inv((x.21*x.24)))
+        z     = h(a.25)^(x.21*inv(x.22))
+        z.1   = h(a.25)^(x.23*inv(x.24))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.22*x.23*inv((x.21*x.24)))
+    
+    32. i1    = i1.15
+        ks    = (x.22*x.24)
+        z     = h(a.25)^(x.21*inv((x.22*x.23)))
+        z.1   = h(a.25)^(x.21*x.24*inv(x.23))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.22*x.24)
+    
+    33. i1    = i1.15
+        ks    = (x.22*x.24*inv(x.21))
+        z     = h(a.25)^(x.21*inv((x.22*x.23)))
+        z.1   = h(a.25)^(x.24*inv(x.23))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.22*x.24*inv(x.21))
+    
+    34. i1    = i1.15
+        ks    = (x.22*inv(x.24))
+        z     = h(a.25)^(x.21*inv((x.22*x.23)))
+        z.1   = h(a.25)^(x.21*inv((x.23*x.24)))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.22*inv(x.24))
+    
+    35. i1    = i1.15
+        ks    = (x.22*inv((x.21*x.24)))
+        z     = h(a.25)^(x.21*inv((x.22*x.23)))
+        z.1   = h(a.25)^inv((x.23*x.24))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.22*inv((x.21*x.24)))
+    
+    36. i1    = i1.15
+        ks    = (x.23*x.24*inv(x.21))
+        z     = h(a.25)^(x.21*x.22*inv(x.23))
+        z.1   = h(a.25)^(x.22*x.24)
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.23*x.24*inv(x.21))
+    
+    37. i1    = i1.15
+        ks    = (x.23*inv(x.21))
+        z     = h(a.25)^(x.21*x.22*inv((x.23*x.24)))
+        z.1   = h(a.25)^(x.22*inv(x.24))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.23*inv(x.21))
+    
+    38. i1    = i1.15
+        ks    = (x.23*inv(x.24))
+        z     = h(a.25)^(x.21*inv(x.22))
+        z.1   = h(a.25)^(x.21*x.23*inv((x.22*x.24)))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.23*inv(x.24))
+    
+    39. i1    = i1.15
+        ks    = (x.23*inv((x.21*x.24)))
+        z     = h(a.25)^(x.21*x.22)
+        z.1   = h(a.25)^(x.22*x.23*inv(x.24))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.23*inv((x.21*x.24)))
+    
+    40. i1    = i1.15
+        ks    = (x.23*inv((x.21*x.24)))
+        z     = h(a.25)^(x.21*x.22*inv(x.23))
+        z.1   = h(a.25)^(x.22*inv(x.24))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.23*inv((x.21*x.24)))
+    
+    41. i1    = i1.15
+        ks    = (x.23*inv((x.21*x.24)))
+        z     = h(a.25)^(x.21*inv(x.22))
+        z.1   = h(a.25)^(x.23*inv((x.22*x.24)))
+        z.2   = h(<i1.15, NN_S(i1.15)>)^(x.23*inv((x.21*x.24)))
+    
+    42. i1    = i1.16
+        ks    = (x.23*x.25*inv(x.26))
+        z     = h(a.27)^(x.22*inv((x.23*x.24)))
+        z.1   = h(a.27)^(x.22*x.25*inv((x.24*x.26)))
+        z.2   = h(<i1.16, NN_S(i1.16)>)^(x.23*x.25*inv(x.26))
+    
+    43. i1    = i1.16
+        ks    = (x.23*x.25*inv((x.22*x.26)))
+        z     = h(a.27)^(x.22*inv((x.23*x.24)))
+        z.1   = h(a.27)^(x.25*inv((x.24*x.26)))
+        z.2   = h(<i1.16, NN_S(i1.16)>)^(x.23*x.25*inv((x.22*x.26)))
+    
+    44. i1    = i1.16
+        ks    = (x.24*x.25*inv((x.22*x.26)))
+        z     = h(a.27)^(x.22*x.23*inv(x.24))
+        z.1   = h(a.27)^(x.23*x.25*inv(x.26))
+        z.2   = h(<i1.16, NN_S(i1.16)>)^(x.24*x.25*inv((x.22*x.26)))
+    
+    45. i1    = i1.16
+        ks    = (x.24*x.26*inv(x.22))
+        z     = h(a.27)^(x.22*x.23*inv((x.24*x.25)))
+        z.1   = h(a.27)^(x.23*x.26*inv(x.25))
+        z.2   = h(<i1.16, NN_S(i1.16)>)^(x.24*x.26*inv(x.22))
+    
+    46. i1    = i1.16
+        ks    = (x.24*inv((x.22*x.26)))
+        z     = h(a.27)^(x.22*x.23*inv((x.24*x.25)))
+        z.1   = h(a.27)^(x.23*inv((x.25*x.26)))
+        z.2   = h(<i1.16, NN_S(i1.16)>)^(x.24*inv((x.22*x.26)))
+    
+    47. i1    = i1.16
+        ks    = (x.25*inv((x.22*x.26)))
+        z     = h(a.27)^(x.22*x.23*inv(x.24))
+        z.1   = h(a.27)^(x.23*x.25*inv((x.24*x.26)))
+        z.2   = h(<i1.16, NN_S(i1.16)>)^(x.25*inv((x.22*x.26)))
+    
+    48. i1    = i1.17
+        ks    = (x.25*x.27*inv((x.23*x.28)))
+        z     = h(a.29)^(x.23*x.24*inv((x.25*x.26)))
+        z.1   = h(a.29)^(x.24*x.27*inv((x.26*x.28)))
+        z.2   = h(<i1.17, NN_S(i1.17)>)^(x.25*x.27*inv((x.23*x.28)))
+  */
+
+rule (modulo E) V_Recv_S:
+   [ In( <S, V, trs, ps> ), St_V_Init( V, R, S, pk, i1, t_r ) ]
+  --[ VRS( V, R, S ) ]->
+   [ St_V_Send_R( V, R, S, pk, i1, t_r, trs, ps ), Out( <V, R, ps> ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_Recv_V:
+   [ In( <V, R, h(hid1)^ks> ), St_R_verif_send( R, V, sk, k_r, b1 ) ]
+  --[ RRV( R, V ) ]->
+   [ St_R_Compute( R, V, sk, k_r, b1 ), Out( <R, V, h(hid1)^ks^k_r> ) ]
+
+  /*
+  rule (modulo AC) R_Recv_V:
+     [ In( <V, R, z> ), St_R_verif_send( R, V, sk, k_r, b1 ) ]
+    --[ RRV( R, V ) ]->
+     [ St_R_Compute( R, V, sk, k_r, b1 ), Out( <R, V, z.1> ) ]
+    variants (modulo AC)
+     1. k_r   = k_r.10
+        z     = h(hid1.10)^ks.10
+        z.1   = h(hid1.10)^(k_r.10*ks.10)
+    
+     2. k_r   = k_r.10
+        z     = h(hid1.10)
+        z.1   = h(hid1.10)^k_r.10
+    
+     3. k_r   = x.10
+        z     = h(hid1.11)^inv(x.10)
+        z.1   = h(hid1.11)
+    
+     4. k_r   = x.10
+        z     = h(hid1.12)^inv((x.10*x.11))
+        z.1   = h(hid1.12)^inv(x.11)
+    
+     5. k_r   = x.10
+        z     = h(hid1.12)^(x.11*inv(x.10))
+        z.1   = h(hid1.12)^x.11
+    
+     6. k_r   = x.10
+        z     = h(hid1.13)^(x.11*inv((x.10*x.12)))
+        z.1   = h(hid1.13)^(x.11*inv(x.12))
+    
+     7. k_r   = inv(x.10)
+        z     = h(hid1.11)^x.10
+        z.1   = h(hid1.11)
+    
+     8. k_r   = inv(x.10)
+        z     = h(hid1.12)^inv(x.11)
+        z.1   = h(hid1.12)^inv((x.10*x.11))
+    
+     9. k_r   = inv(x.10)
+        z     = h(hid1.12)^(x.10*x.11)
+        z.1   = h(hid1.12)^x.11
+    
+    10. k_r   = inv(x.10)
+        z     = h(hid1.13)^(x.11*inv(x.12))
+        z.1   = h(hid1.13)^(x.11*inv((x.10*x.12)))
+    
+    11. k_r   = inv((x.10*x.11))
+        z     = h(hid1.12)^x.10
+        z.1   = h(hid1.12)^inv(x.11)
+    
+    12. k_r   = inv((x.10*x.11))
+        z     = h(hid1.13)^(x.10*x.12)
+        z.1   = h(hid1.13)^(x.12*inv(x.11))
+    
+    13. k_r   = inv((x.10*x.11))
+        z     = h(hid1.13)^(x.10*inv(x.12))
+        z.1   = h(hid1.13)^inv((x.11*x.12))
+    
+    14. k_r   = inv((x.10*x.11))
+        z     = h(hid1.14)^(x.10*x.12*inv(x.13))
+        z.1   = h(hid1.14)^(x.12*inv((x.11*x.13)))
+    
+    15. k_r   = one
+        z     = h(hid1.10)^ks.10
+        z.1   = h(hid1.10)^ks.10
+    
+    16. k_r   = one
+        z     = h(hid1.10)
+        z.1   = h(hid1.10)
+    
+    17. k_r   = (x.10*x.11)
+        z     = h(hid1.12)^inv(x.10)
+        z.1   = h(hid1.12)^x.11
+    
+    18. k_r   = (x.10*x.11)
+        z     = h(hid1.13)^inv((x.10*x.12))
+        z.1   = h(hid1.13)^(x.11*inv(x.12))
+    
+    19. k_r   = (x.10*x.11)
+        z     = h(hid1.13)^(x.12*inv(x.10))
+        z.1   = h(hid1.13)^(x.11*x.12)
+    
+    20. k_r   = (x.10*x.11)
+        z     = h(hid1.14)^(x.12*inv((x.10*x.13)))
+        z.1   = h(hid1.14)^(x.11*x.12*inv(x.13))
+    
+    21. k_r   = (x.10*x.11*inv(x.12))
+        z     = h(hid1.13)^(x.12*inv(x.10))
+        z.1   = h(hid1.13)^x.11
+    
+    22. k_r   = (x.10*x.11*inv(x.12))
+        z     = h(hid1.14)^inv((x.10*x.13))
+        z.1   = h(hid1.14)^(x.11*inv((x.12*x.13)))
+    
+    23. k_r   = (x.10*x.11*inv(x.12))
+        z     = h(hid1.14)^(x.12*x.13*inv(x.10))
+        z.1   = h(hid1.14)^(x.11*x.13)
+    
+    24. k_r   = (x.10*x.11*inv(x.12))
+        z     = h(hid1.14)^(x.12*inv((x.10*x.13)))
+        z.1   = h(hid1.14)^(x.11*inv(x.13))
+    
+    25. k_r   = (x.10*x.11*inv(x.12))
+        z     = h(hid1.15)^(x.12*x.13*inv((x.10*x.14)))
+        z.1   = h(hid1.15)^(x.11*x.13*inv(x.14))
+    
+    26. k_r   = (x.10*x.11*inv(x.12))
+        z     = h(hid1.15)^(x.13*inv((x.10*x.14)))
+        z.1   = h(hid1.15)^(x.11*x.13*inv((x.12*x.14)))
+    
+    27. k_r   = (x.10*x.11*inv((x.12*x.13)))
+        z     = h(hid1.14)^(x.12*inv(x.10))
+        z.1   = h(hid1.14)^(x.11*inv(x.13))
+    
+    28. k_r   = (x.10*x.11*inv((x.12*x.13)))
+        z     = h(hid1.15)^(x.12*x.14*inv(x.10))
+        z.1   = h(hid1.15)^(x.11*x.14*inv(x.13))
+    
+    29. k_r   = (x.10*x.11*inv((x.12*x.13)))
+        z     = h(hid1.15)^(x.12*inv((x.10*x.14)))
+        z.1   = h(hid1.15)^(x.11*inv((x.13*x.14)))
+    
+    30. k_r   = (x.10*x.11*inv((x.12*x.13)))
+        z     = h(hid1.16)^(x.12*x.14*inv((x.10*x.15)))
+        z.1   = h(hid1.16)^(x.11*x.14*inv((x.13*x.15)))
+    
+    31. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.12)^x.11
+        z.1   = h(hid1.12)^x.10
+    
+    32. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.12)^(x.11*inv(x.10))
+        z.1   = h(hid1.12)
+    
+    33. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.13)^inv(x.12)
+        z.1   = h(hid1.13)^(x.10*inv((x.11*x.12)))
+    
+    34. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.13)^inv((x.10*x.12))
+        z.1   = h(hid1.13)^inv((x.11*x.12))
+    
+    35. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.13)^(x.11*x.12)
+        z.1   = h(hid1.13)^(x.10*x.12)
+    
+    36. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.13)^(x.11*x.12*inv(x.10))
+        z.1   = h(hid1.13)^x.12
+    
+    37. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.13)^(x.11*inv((x.10*x.12)))
+        z.1   = h(hid1.13)^inv(x.12)
+    
+    38. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.14)^(x.11*x.12*inv((x.10*x.13)))
+        z.1   = h(hid1.14)^(x.12*inv(x.13))
+    
+    39. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.14)^(x.12*inv(x.13))
+        z.1   = h(hid1.14)^(x.10*x.12*inv((x.11*x.13)))
+    
+    40. k_r   = (x.10*inv(x.11))
+        z     = h(hid1.14)^(x.12*inv((x.10*x.13)))
+        z.1   = h(hid1.14)^(x.12*inv((x.11*x.13)))
+    
+    41. k_r   = (x.10*inv((x.11*x.12)))
+        z     = h(hid1.13)^x.11
+        z.1   = h(hid1.13)^(x.10*inv(x.12))
+    
+    42. k_r   = (x.10*inv((x.11*x.12)))
+        z     = h(hid1.13)^(x.11*inv(x.10))
+        z.1   = h(hid1.13)^inv(x.12)
+    
+    43. k_r   = (x.10*inv((x.11*x.12)))
+        z     = h(hid1.14)^(x.11*x.13)
+        z.1   = h(hid1.14)^(x.10*x.13*inv(x.12))
+    
+    44. k_r   = (x.10*inv((x.11*x.12)))
+        z     = h(hid1.14)^(x.11*x.13*inv(x.10))
+        z.1   = h(hid1.14)^(x.13*inv(x.12))
+    
+    45. k_r   = (x.10*inv((x.11*x.12)))
+        z     = h(hid1.14)^(x.11*inv(x.13))
+        z.1   = h(hid1.14)^(x.10*inv((x.12*x.13)))
+    
+    46. k_r   = (x.10*inv((x.11*x.12)))
+        z     = h(hid1.14)^(x.11*inv((x.10*x.13)))
+        z.1   = h(hid1.14)^inv((x.12*x.13))
+    
+    47. k_r   = (x.10*inv((x.11*x.12)))
+        z     = h(hid1.15)^(x.11*x.13*inv(x.14))
+        z.1   = h(hid1.15)^(x.10*x.13*inv((x.12*x.14)))
+    
+    48. k_r   = (x.10*inv((x.11*x.12)))
+        z     = h(hid1.15)^(x.11*x.13*inv((x.10*x.14)))
+        z.1   = h(hid1.15)^(x.13*inv((x.12*x.14)))
+  */
+
+rule (modulo E) V_Not_Model:
+   [ St_V_Send_R( V, R, S, pk, i1, t_r, trs, ps ), In( <R, V, psr> ) ]
+  --[ Neq( trs, psr ), VNM( V, R, S ) ]->
+   [ St_V_End_Diff( V, R, S ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) V_Recv_R_Comp:
+   [ St_V_Send_R( V, R, S, pk, i1, t_r, trs, ps ), In( psr ), Fr( ~r1 ) ]
+  --[ Eq( psr, trs ), VRVC( V, R, S ) ]->
+   [
+   St_V_Recv_R_Comp( V, R, S, pk, ~r1, snd(t_r) ),
+   Out( add_outer(aenc(~r1, pk), snd(t_r)) )
+   ]
+
+  /*
+  rule (modulo AC) V_Recv_R_Comp:
+     [ St_V_Send_R( V, R, S, pk, i1, t_r, trs, ps ), In( psr ), Fr( ~r1 ) ]
+    --[ Eq( psr, trs ), VRVC( V, R, S ) ]->
+     [ St_V_Recv_R_Comp( V, R, S, pk, ~r1, z ), Out( aenc(~r1, pk) ) ]
+    variants (modulo AC)
+    1. t_r   = t_r.22
+       z     = snd(t_r.22)
+    
+    2. t_r   = <x.103, z.60>
+       z     = z.60
+  */
+
+rule (modulo E) R_Recv_sum:
+   [ St_R_Compute( R, V, sk, k_r, b1 ), In( add_outer(enc_r1, enc_b1) ) ]
+  --[ RRS( R, V ), Hom_outer( add_outer(enc_r1, enc_b1) ) ]->
+   [ Out( hom(add_outer(enc_r1, enc_b1), sk, pk(sk)) ), St_R_End( R, V ) ]
+
+  /*
+  rule (modulo AC) R_Recv_sum:
+     [ St_R_Compute( R, V, sk, k_r, b1 ), In( z ) ]
+    --[ RRS( R, V ), Hom_outer( z ) ]->
+     [ Out( hom(z, sk, pk(sk)) ), St_R_End( R, V ) ]
+  */
+
+rule (modulo E) V_Recv_dec_sum:
+   [ St_V_Recv_R_Comp( V, R, S, pk, r1, enc_b ), In( add_inner(a1, b1) ) ]
+  --[
+  VRDS( V, R, S ),
+  Eq( aenc(minus_inner(fst(add_inner(a1, b1)), r1), pk), enc_b ),
+  Hom_inner( aenc(fst(add_inner(a1, b1)), pk) )
+  ]->
+   [ St_V_End( V, R, S ) ]
+
+  /*
+  rule (modulo AC) V_Recv_dec_sum:
+     [ St_V_Recv_R_Comp( V, R, S, pk, r1, enc_b ), In( z ) ]
+    --[
+    VRDS( V, R, S ), Eq( aenc(z.1, pk), enc_b ), Hom_inner( aenc(z.1, pk) )
+    ]->
+     [ St_V_End( V, R, S ) ]
+    variants (modulo AC)
+    1. z     = z.13
+       z.1   = fst(z.13)
+    
+    2. z     = <z.14, x.17>
+       z.1   = z.14
+  */
+
+lemma same_model:
+  exists-trace
+  "∃ V R S #i1 #i2 #i3 #i4 #i5 #i6 #i7 #i8.
+    (((((((RVS( R, V ) @ #i1) ∧ (VQS( V, R, S ) @ #i2)) ∧
+         (SVQR( S, V ) @ #i3)) ∧
+        (VRS( V, R, S ) @ #i4)) ∧
+       (RRV( R, V ) @ #i5)) ∧
+      (VRVC( V, R, S ) @ #i6)) ∧
+     (RRS( R, V ) @ #i7)) ∧
+    (VRDS( V, R, S ) @ #i8)"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ V R S #i1 #i2 #i3 #i4 #i5 #i6 #i7 #i8.
+  (RVS( R, V ) @ #i1) ∧
+  (VQS( V, R, S ) @ #i2) ∧
+  (SVQR( S, V ) @ #i3) ∧
+  (VRS( V, R, S ) @ #i4) ∧
+  (RRV( R, V ) @ #i5) ∧
+  (VRVC( V, R, S ) @ #i6) ∧
+  (RRS( R, V ) @ #i7) ∧
+  (VRDS( V, R, S ) @ #i8)"
+*/
+simplify
+solve( St_R_Init( R, V, sk, k_r, i1.1, b1 ) ▶₀ #i1 )
+  case R_Init
+  solve( St_V( $V, $R, S ) ▶₁ #i2 )
+    case V_Init
+    solve( St_S_Init( $S, $V, ks ) ▶₁ #i3 )
+      case S_Init
+      solve( St_V_Init( $V, $R, $S, pk.1, i1.4, t_r ) ▶₁ #i4 )
+        case V_querying_S
+        solve( St_R_verif_send( $R, $V, sk.1, k_r.1, b1.1 ) ▶₁ #i5 )
+          case R_verif_send
+          solve( St_V_Send_R( $V, $R, $S, pk.1, i1.4, t_r, psr, ps.1 ) ▶₀ #i6 )
+            case V_Recv_S
+            solve( St_R_Compute( $R, $V, sk.1, k_r.1, b1.1 ) ▶₀ #i7 )
+              case R_Recv_V
+              solve( St_V_Recv_R_Comp( $V, $R, $S, pk.1, r1.1, aenc(z.5, pk.1)
+                     ) ▶₀ #i8 )
+                case V_Recv_R_Comp
+                solve( splitEqs(7) )
+                  case split_case_1
+                  solve( splitEqs(2) )
+                    case split_case_1
+                    solve( splitEqs(4) )
+                      case split_case_1
+                      solve( !KU( aenc(z, pk) ) @ #vk.15 )
+                        case c_aenc
+                        solve( !KU( h(a.1)^k ) @ #vk.20 )
+                          case R_Recv_V_case_01
+                          solve( !KU( h(hid1)^ks ) @ #vk.24 )
+                            case R_verif_send_case_1
+                            SOLVED // trace found
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma diff_model:
+  exists-trace
+  "∃ V R S #i1 #i2 #i3 #i4 #i5 #i6.
+    (((((RVS( R, V ) @ #i1) ∧ (VQS( V, R, S ) @ #i2)) ∧
+       (SVQR( S, V ) @ #i3)) ∧
+      (VRS( V, R, S ) @ #i4)) ∧
+     (RRV( R, V ) @ #i5)) ∧
+    (VNM( V, R, S ) @ #i6)"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ V R S #i1 #i2 #i3 #i4 #i5 #i6.
+  (RVS( R, V ) @ #i1) ∧
+  (VQS( V, R, S ) @ #i2) ∧
+  (SVQR( S, V ) @ #i3) ∧
+  (VRS( V, R, S ) @ #i4) ∧
+  (RRV( R, V ) @ #i5) ∧
+  (VNM( V, R, S ) @ #i6)"
+*/
+simplify
+solve( St_R_Init( R, V, sk, k_r, i1.1, b1 ) ▶₀ #i1 )
+  case R_Init
+  solve( St_V( $V, $R, S ) ▶₁ #i2 )
+    case V_Init
+    solve( St_S_Init( $S, $V, ks ) ▶₁ #i3 )
+      case S_Init
+      solve( St_V_Init( $V, $R, $S, pk.1, i1.4, t_r ) ▶₁ #i4 )
+        case V_querying_S
+        solve( St_R_verif_send( $R, $V, sk.1, k_r.1, b1.1 ) ▶₁ #i5 )
+          case R_verif_send
+          solve( St_V_Send_R( $V, $R, $S, pk.1, i1.4, t_r, trs.1, ps.1 ) ▶₀ #i6 )
+            case V_Recv_S
+            solve( splitEqs(2) )
+              case split_case_1
+              solve( splitEqs(4) )
+                case split_case_1
+                solve( !KU( h(a.1)^k ) @ #vk.22 )
+                  case R_Recv_V_case_01
+                  solve( !KU( h(hid1)^ks ) @ #vk.26 )
+                    case R_verif_send_case_1
+                    SOLVED // trace found
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma hom:
+  all-traces
+  "∀ sum inner #i #j.
+    ((((Hom_outer( sum ) @ #i) ∧ (Hom_inner( inner ) @ #j)) ∧
+      (¬(∃ #k. (!KU( sum ) @ #k) ∧ (#k < #i)))) ∧
+     (¬(∃ #k. (!KU( inner ) @ #k) ∧ (#k < #j)))) ⇒
+    (inner = sum)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sum inner #i #j.
+  (Hom_outer( sum ) @ #i) ∧ (Hom_inner( inner ) @ #j)
+ ∧
+  (∀ #k. (!KU( sum ) @ #k) ⇒ ¬(#k < #i)) ∧
+  (∀ #k. (!KU( inner ) @ #k) ⇒ ¬(#k < #j)) ∧
+  (¬(inner = sum))"
+*/
+simplify
+by contradiction /* from formulas */
+
+/* All well-formedness checks were successful. */
+
+end
