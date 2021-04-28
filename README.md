@@ -22,9 +22,9 @@ We will introduce the syntactic base but more can be found in the Tamarin-prover
 A protocol is a set of rules. And to verify security properties of the protocol we use lemmas.
 A rule is a link state(s):
 	rule Rule_Name:
-		[State1(parameter1, parameter2), State2(parameter3)]
-		--[ActionFact()]->
-		[State3(parameter2)]
+	[State1(parameter1, parameter2), State2(parameter3)]
+	--[ActionFact()]->
+	[State3(parameter2)]
 As we can see a Rule can be applied only if the State1 and State2 are presents. Then it consumes them to create a new state: State3.
 Here we can see another thing: ActionFact(). Action facts may be used in two different cases that we will see : Restriction and Lemmas.
 
