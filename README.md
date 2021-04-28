@@ -42,7 +42,7 @@ To gain in clarity you can use 'let in' :
 ~~~~
 
 
-Now, the soul of a protocol is 'exchange'. To exchange on the network, tamarin has two built-ins function : Out and In.
+Now, the soul of a protocol is 'exchange'. To exchange on the network, tamarin has two built-ins function : `Out` and `In`.
 In can only be in the Initial States since it the entry to receive a message from the network. 
 Contrarily Out can only be in the created states since it is a message that will be send to the network. 
 Note that everything that is going in the network can be seen, removed, changed by an adversary.
@@ -52,7 +52,7 @@ For this there are things called restriction in tamarin:
 ~~~~
 	restriction Equal : "All a b #i. Eq(a,b)@#i ==> a=b"
 ~~~~
-This mean that if there is 'Eq(parameter1, parameter2)' in the ActionFact set, then it means that in the rule parameter1 has to be equal to parameter2.
+This mean that if there is `Eq(parameter1, parameter2)` in the ActionFact set, then parameter1 has to be equal to parameter2.
 
 
 We have our set of rule that model our protocol. We now want to prove some security properties for this protocol, therefore we will use lemmas.
