@@ -9,7 +9,9 @@ This is a project to formally prove the protocol in the paper :
 ### Prerequisites
 
 Requirements for Tamarin-prover 
+
 - [Tamarin-prover manual](https://tamarin-prover.github.io/)
+
 - [Tamarin-prover git](https://github.com/tamarin-prover/tamarin-prover)
 
 ## Tamarin Introduction
@@ -17,6 +19,7 @@ Tamarin prover is a formal verification tool for cryptographic protocols.
 We will introduce the syntactic base but more can be found in the Tamarin-prover Manual as well as many examples in the tamarin git.
 
 A protocol is a set of rules. And to verify security properties of the protocol we use lemmas.
+
 A rule is a link state(s):
 ~~~~
 	rule Rule_Name:
@@ -64,12 +67,16 @@ a basic example :
 		"All x #i. ActionFact(x)@#i ==> not(Ex #k.KU(x)@#k)"
 ~~~~
 `#i` model a timestamp (if the is ActionFact(x) at time #i).
+
 `K(x)` model that the adversary has knowledge of K.
+
 `KU(x)` model that the adversary sent x to the network (and therefore has knowledge of it).
 ## SPTHY Files
 
 There are two spthy files:
+
 `Corr_watermark.spthy` is the file to verify the execution and the wellformedness of the tamarin model.
+
 `Watermark.spthy` is the file in which we verify the confidentiality of the parameters.
 
 ## Running the tests
