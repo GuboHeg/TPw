@@ -75,9 +75,9 @@ a basic example :
 
 There are two spthy files:
 
-`Corr_watermark.spthy` is the file to verify the execution and the wellformedness of the tamarin model.
+`corr_watermark.spthy` is the file to verify the execution and the wellformedness of the tamarin model.
 
-`Watermark.spthy` is the file in which we verify the confidentiality of the parameters.
+`conf_watermark.spthy` is the file in which we verify the confidentiality of the parameters.
 
 ## Running the tests
 
