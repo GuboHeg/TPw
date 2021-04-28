@@ -42,9 +42,9 @@ To gain in clarity you can use 'let in' :
 ~~~~
 
 
-Now, the soul of a protocol is 'exchange'. To exchange on the network, tamarin has two built-ins function : `Out` and `In`.
-In can only be in the Initial States since it the entry to receive a message from the network. 
-Contrarily Out can only be in the created states since it is a message that will be send to the network. 
+Since the soul of a protocol is to exchange thanks to a network, tamarin has two built-ins function : `Out` and `In`.
+`In` can only be in the Initial States since it the entry to receive a message from the network. 
+Contrarily `Out` can only be in the created states since it is a message that will be send to the network. 
 Note that everything that is going in the network can be seen, removed, changed by an adversary.
 
 Sometime in a protocol it is needed to restrict something, for example verifying a signature or an Hmac. 
