@@ -1,7 +1,7 @@
 
 # [Tamarin-prover] A protocol for secure verification of watermarks embedded into Machine Learning models
 
-This is a project to formally prove the protocol in the paper : 
+This is a project to formally prove the protocol modeled in: 
 
 ## Getting Started
 
