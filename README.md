@@ -29,6 +29,7 @@ As we can see a Rule can be applied only if the State1 and State2 are presents. 
 Here we can see another thing: ActionFact(). Action facts may be used in two different cases that we will see : Restriction and Lemmas.
 
 To gain in clarity you can use 'let in' :
+	```c
 	rule Rule_Name:
 		let
 		new_param = <parameter1, parameter2>
@@ -36,6 +37,8 @@ To gain in clarity you can use 'let in' :
 		[State1(parameter1, parameter2), State2(parameter3)]
 		--[ActionFact()]->
 		[State3(new_param)]
+	```
+
 
 Now, the soul of a protocol is 'exchange'. To exchange on the network, tamarin has two built-ins function : Out and In.
 In can only be in the Initial States since it the entry to receive a message from the network. 
